@@ -1,23 +1,19 @@
 #include <opencv2/features2d.hpp>
 #include <opencv2/video.hpp>
-#include <opencv2/videoio.hpp>
 #include <opencv2/opencv.hpp>
-#include <vector>
-#include <set>
-#include <iostream>
-#include <iomanip>
 
-#include "stats.h" // Stats structure definition
 #include "utils.h" // Drawing and printing functions
+
+#include "chilitrack.h"
 
 using namespace std;
 using namespace cv;
+using namespace chilitrack;
 
 const double akaze_thresh = 3e-4; // AKAZE detection threshold set to locate about 1000 keypoints
 const double ransac_thresh = 2.5f; // RANSAC inlier threshold
 const double nn_match_ratio = 0.8f; // Nearest-neighbour matching ratio
 const int bb_min_inliers = 50; // Minimal number of inliers to draw bounding box
-const int stats_update_period = 10; // On-screen statistics are updated every 10 frames
 
 Point2f mean(const vector<Point2f>& vals)
 {
@@ -40,126 +36,6 @@ double variance(const vector<Point2f>& vals)
     return temp/nbvals;
 }
 
-
-class Template
-{
-
-public:
-    // Nb of features used for tracking the template
-    static const int NB_FEATURES = 50;
-
-    Template(cv::Mat tpl, 
-             cv::Size size, 
-             cv::Ptr<cv::Feature2D> detector);
-
-    cv::Mat image() const {return _tpl;}
-    cv::Mat debug() const {return _tpl_debug;}
-
-    std::vector<cv::KeyPoint> kpts;
-    cv::Mat desc;
-    std::vector<cv::Point2f> tracking_kpts;
-
-    std::vector<cv::Point3f> tpl_points;
-    cv::Rect bb;
-
-protected:
-    cv::Mat _tpl;
-    cv::Mat _tpl_debug;
-};
-
-Template::Template(cv::Mat tpl, 
-             cv::Size size, 
-             cv::Ptr<cv::Feature2D> detector) {
-
-
-    _tpl = tpl.clone();
-
-    // Extract features and descriptors from the tpl image
-    // -------------------------------
-
-    (*detector)(tpl, noArray(), kpts, desc);
-
-    cout << kpts.size() << " keypoints on the template" << endl;
-
-    // Store the template bounding box
-    // -------------------------------
-
-    bb = Rect(-size.width / 2, -size.height / 2, size.width, size.height);
- 
-    // Find good features for tracking
-    // -------------------------------
-
-    // cf http://docs.opencv.org/trunk/modules/imgproc/doc/feature_detection.html#goodfeaturestotrack
-    double quality = 0.1;
-    // TODO: adapt this euclidian distance to the actual tpl size
-    double min_distance = 15;
-    tracking_kpts.reserve(NB_FEATURES);
-    goodFeaturesToTrack(tpl, tracking_kpts, NB_FEATURES, quality, min_distance);
-
-    vector<KeyPoint> kpts_viz;
-    KeyPoint::convert(tracking_kpts, kpts_viz);
-    drawKeypoints(_tpl, kpts_viz, _tpl_debug);
-
-    // Store the physical location of the tracking features 
-    // ----------------------------------------------------
-
-    // assume (0,0) at the center of the template
-    tpl_points.reserve(NB_FEATURES);
-
-    int physical_width = size.width; int physical_height = size.height;
-    int width = tpl.cols; int height = tpl.rows;
-
-    float xratio = (float) physical_width/width;
-    float yratio = (float) physical_height/height;
-
-    for (auto pt : tracking_kpts) {
-        tpl_points.push_back(
-                    Point3f(pt.x * xratio - physical_width / 2,
-                            pt.y * yratio - physical_height / 2,
-                            0.f)
-                    );
-    }
-}
-
-class Tracker
-{
-public:
-    Tracker(Ptr<Feature2D> _detector,
-            Ptr<DescriptorMatcher> _matcher,
-            Size sceneResolution);
-
-    Mat process(const Mat frame, Ptr<Template> tpl, Stats& stats);
-    Mat match(const Mat frame, Ptr<Template> tpl, Stats& stats);
-    Mat track(const Mat frame, Ptr<Template> tpl, Stats& stats);
-    Ptr<Feature2D> getDetector() {
-        return detector;
-    }
-protected:
-
-    Matx44d computeTransformation(Ptr<Template> tpl) const;
-
-    Ptr<Feature2D> detector;
-    Ptr<DescriptorMatcher> matcher;
-
-    std::vector<cv::Point3f> tpl_points;
-    std::vector<cv::Point2f> features;
-
-    // when tracking, store the previous frame for optical flow computation
-    cv::Mat prev_frame;
-    bool tracking_enabled;
-
-    cv::Size cameraResolution;
-    cv::Mat cameraMatrix;
-    cv::Mat distCoeffs;
-
-private:
-    void pruneFeatures(std::vector<cv::Point2f>& features, 
-                       std::vector<cv::Point3f>& tpl_points );
-    cv::Point2f _centroid;
-    double _variance;
-
-
-};
 
 Tracker::Tracker(Ptr<Feature2D> _detector, 
                  Ptr<DescriptorMatcher> _matcher,
@@ -353,11 +229,11 @@ Matx44d Tracker::computeTransformation(Ptr<Template> tpl) const
     cv::Mat rotation, translation;
 
     // Find the 3D pose of our template
-    cv::solvePnP(tpl_points,
+    cv::solvePnPRansac(tpl_points,
                  features,
                  cameraMatrix, distCoeffs,
                  rotation, translation, false,
-                 SOLVEPNP_ITERATIVE);
+                 SOLVEPNP_EPNP);
 
     cv::Matx33d rotMat;
     cv::Rodrigues(rotation, rotMat);
@@ -396,67 +272,3 @@ void Tracker::pruneFeatures(vector<Point2f>& features, vector<Point3f>& tpl_poin
 ///////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////
 
-
-
-int main(int argc, char **argv)
-{
-    namedWindow("tracking");
-
-    if(argc < 2) {
-        cerr << "Usage: " << endl <<
-                "tracker template_path" << endl;
-        return 1;
-    }
-    VideoCapture video_in(1);
-
-    if(!video_in.isOpened()) {
-        cerr << "Couldn't open camera" << endl;
-        return 1;
-    }
-
-    double inputWidth  = video_in.get(cv::CAP_PROP_FRAME_WIDTH);
-    double inputHeight = video_in.get(cv::CAP_PROP_FRAME_HEIGHT);
-
-    Mat image_object = imread(argv[1], IMREAD_GRAYSCALE);
-    if( !image_object.data )
-          { cerr << " --(!) Error reading object image " << std::endl; return -1; }
-
-
-    Stats stats, global_stats;
-    Mat frame;
-
-    //Ptr<Feature2D> detector = Feature2D::create("AKAZE");
-    //detector->set("threshold", akaze_thresh);
-    Ptr<Feature2D> detector = Feature2D::create("ORB");
-    detector->set("nFeatures", 500); // default: 500
-
-    Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
-
-    Tracker tracker(detector, matcher, Size(inputWidth, inputHeight));
-
-    auto tpl = makePtr<Template>(Template(image_object, Size(210, 297), detector));
-
-
-    Stats draw_stats;
-    Mat res_frame;
-    int frame_count = 0;
-
-    for(; ; frame_count++) {
-        bool update_stats = (frame_count % stats_update_period == 0);
-        video_in >> frame;
-
-        res_frame = tracker.process(frame, tpl, stats);
-        global_stats += stats;
-        if(update_stats) {
-            draw_stats = stats;
-        }
-
-        drawStatistics(res_frame, draw_stats);
-
-        imshow("tracking", res_frame);
-        if (waitKey(10) >= 0) break;
-    }
-    global_stats /= frame_count;
-    printStatistics("Tracker", stats);
-    return 0;
-}

@@ -3,6 +3,9 @@
 
 #include <opencv2/core.hpp>
 #include <vector>
+#include <iomanip>
+#include <iostream>
+
 #include "stats.h"
 
 using namespace std;
@@ -10,7 +13,6 @@ using namespace cv;
 
 void drawBoundingBox(Mat image, vector<Point2f> bb);
 void drawStatistics(Mat image, const Stats& stats);
-void printStatistics(string name, Stats stats);
 vector<Point2f> Points(vector<KeyPoint> keypoints);
 
 void drawBoundingBox(Mat image, vector<Point2f> bb)
@@ -123,36 +125,6 @@ Mat combineImages(Mat tpl, Mat frame) {
     frame.copyTo(outImg2);
 
     return res;
-}
-
-void drawStatistics(Mat image, const Stats& stats)
-{
-    static const int font = FONT_HERSHEY_PLAIN;
-    stringstream str0, str1, str2, str3, str4;
-
-    str0 << "Keypoints: " << stats.keypoints;
-    str1 << "Matches: " << stats.matches;
-    str2 << "Inliers: " << stats.inliers;
-    str3 << "Inlier ratio: " << setprecision(2) << stats.ratio;
-    str4 << "Process. time: " << stats.duration;
-
-    putText(image, str0.str(), Point(0, image.rows - 120), font, 2, Scalar::all(255), 3);
-    putText(image, str1.str(), Point(0, image.rows - 90), font, 2, Scalar::all(255), 3);
-    putText(image, str2.str(), Point(0, image.rows - 60), font, 2, Scalar::all(255), 3);
-    putText(image, str3.str(), Point(0, image.rows - 30), font, 2, Scalar::all(255), 3);
-    putText(image, str4.str(), Point(0, image.rows - 0), font, 2, Scalar::all(255), 3);
-}
-
-void printStatistics(string name, Stats stats)
-{
-    cout << name << endl;
-    cout << "----------" << endl;
-
-    cout << "Matches " << stats.matches << endl;
-    cout << "Inliers " << stats.inliers << endl;
-    cout << "Inlier ratio " << setprecision(2) << stats.ratio << endl;
-    cout << "Keypoints " << stats.keypoints << endl;
-    cout << endl;
 }
 
 vector<Point2f> Points(vector<KeyPoint> keypoints)
