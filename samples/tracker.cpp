@@ -35,7 +35,7 @@ int main(int argc, char **argv)
 
     if(argc < 2) {
         cerr << "Usage: " << endl <<
-                "tracker template_path" << endl;
+                "tracker template_path [calibration file]" << endl;
         return 1;
     }
     VideoCapture video_in(1);
@@ -65,7 +65,11 @@ int main(int argc, char **argv)
 
     Tracker tracker(detector, matcher, Size(inputWidth, inputHeight));
 
-    auto tpl = makePtr<Template>(Template(image_object, Size(210, 297), detector));
+    if(argc == 3) {
+        tracker.readCalibration(argv[2]);
+    }
+
+    auto tpl = makePtr<Template>(Template(image_object, Size(200, 297), detector));
 
 
     Stats draw_stats;

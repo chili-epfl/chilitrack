@@ -267,8 +267,44 @@ void Tracker::pruneFeatures(vector<Point2f>& features, vector<Point3f>& tpl_poin
     tpl_points = prunedTplPoints;
 
 }
-///////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////
+
+/** Sets new camera calibration values.
+ */
+void Tracker::setCalibration(cv::InputArray newCameraMatrix,
+                    cv::InputArray newDistCoeffs){
+    cameraMatrix = newCameraMatrix.getMat();
+    distCoeffs = newDistCoeffs.getMat();
+}
+
+void Tracker::readCalibration(const std::string &filename) {
+
+    cv::Size size;
+    cv::FileStorage fs(filename, cv::FileStorage::READ);
+    if (!fs.isOpened()) {
+        cerr << "Could not read calibration file " << filename << endl;
+        cerr << "Using default camera parameter as fallback." << endl;
+        return;
+    }
+
+    fs["image_width"]             >> size.width;
+    fs["image_height"]            >> size.height;
+
+    if (size != cameraResolution) {
+        cerr << "The calibration was done for a resolution (" << size 
+             << ") that does not match the current one (" << cameraResolution 
+             << ")." <<endl;
+        cerr << "Using default camera parameter as fallback." << endl;
+        return;
+    }
+
+    fs["distortion_coefficients"] >> distCoeffs;
+    fs["camera_matrix"]           >> cameraMatrix;
+
+    if( distCoeffs.type() != CV_64F )
+        distCoeffs = cv::Mat_<double>(distCoeffs);
+    if( cameraMatrix.type() != CV_64F )
+        cameraMatrix = cv::Mat_<double>(cameraMatrix);
+
+    cout << "Using camera calibration from file " << filename << "." << endl;
+}
 
