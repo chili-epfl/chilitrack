@@ -2,7 +2,7 @@
 #include <iostream>
 #include <iomanip>
 
-#include "chilitrack.h"
+#include <chilitrack.h>
 
 using namespace std;
 using namespace cv;
@@ -31,6 +31,8 @@ void drawStatistics(Mat image, const Stats& stats)
 
 int main(int argc, char **argv)
 {
+    Mat frame;
+
     namedWindow("tracking");
 
     if(argc < 2) {
@@ -45,60 +47,59 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    double inputWidth  = video_in.get(cv::CAP_PROP_FRAME_WIDTH);
-    double inputHeight = video_in.get(cv::CAP_PROP_FRAME_HEIGHT);
+    // Read one frame to initialize the capture
+    video_in >> frame;
 
     Mat image_object = imread(argv[1], IMREAD_GRAYSCALE);
     if( !image_object.data )
           { cerr << " --(!) Error reading object image " << std::endl; return -1; }
 
 
-    Stats stats, global_stats;
-    Mat frame;
-
     //Ptr<Feature2D> detector = Feature2D::create("AKAZE");
     //detector->set("threshold", akaze_thresh);
     Ptr<Feature2D> detector = Feature2D::create("ORB");
-    detector->set("nFeatures", 500); // default: 500
+    detector->set("nFeatures", 700); // default: 500
 
     Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
 
-    Tracker tracker(detector, matcher, Size(inputWidth, inputHeight));
+    Tracker tracker(detector, matcher);
 
     if(argc == 3) {
         tracker.readCalibration(argv[2]);
     }
 
-    auto tpl = makePtr<Template>(Template(image_object, Size(200, 297), detector));
+    auto tpl = makePtr<Template>(Template(image_object,
+                                          Size(200, 297), 
+                                          detector));
 
 
-    Stats draw_stats;
-    Mat res_frame;
+    auto stats = makePtr<Stats>();
+    Stats draw_stats, global_stats;
     int frame_count = 0;
 
     for(; ; frame_count++) {
         bool update_stats = (frame_count % stats_update_period == 0);
         video_in >> frame;
 
-        res_frame = tracker.process(frame, tpl, stats);
-        global_stats += stats;
+        tracker.process(frame, tpl, stats);
+        global_stats += *stats;
         if(update_stats) {
-            draw_stats = stats;
+            draw_stats = *stats;
         }
 
-        drawStatistics(res_frame, draw_stats);
+        drawStatistics(tracker._debug, draw_stats);
 
-        imshow("tracking", res_frame);
+        imshow("tracking", tracker._debug);
         if (waitKey(10) >= 0) break;
     }
     global_stats /= frame_count;
     
     cout << "----------" << endl;
 
-    cout << "Matches " << stats.matches << endl;
-    cout << "Inliers " << stats.inliers << endl;
-    cout << "Inlier ratio " << setprecision(2) << stats.ratio << endl;
-    cout << "Keypoints " << stats.keypoints << endl;
+    cout << "Matches " << stats->matches << endl;
+    cout << "Inliers " << stats->inliers << endl;
+    cout << "Inlier ratio " << setprecision(2) << stats->ratio << endl;
+    cout << "Keypoints " << stats->keypoints << endl;
     cout << endl;
 
     return 0;

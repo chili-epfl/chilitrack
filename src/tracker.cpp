@@ -13,7 +13,7 @@ using namespace chilitrack;
 const double akaze_thresh = 3e-4; // AKAZE detection threshold set to locate about 1000 keypoints
 const double ransac_thresh = 2.5f; // RANSAC inlier threshold
 const double nn_match_ratio = 0.8f; // Nearest-neighbour matching ratio
-const int bb_min_inliers = 50; // Minimal number of inliers to draw bounding box
+const int bb_min_inliers = 30; // Minimal number of inliers to draw bounding box
 
 Point2f mean(const vector<Point2f>& vals)
 {
@@ -38,40 +38,53 @@ double variance(const vector<Point2f>& vals)
 
 
 Tracker::Tracker(Ptr<Feature2D> _detector, 
-                 Ptr<DescriptorMatcher> _matcher,
-                 Size sceneResolution) :
+                 Ptr<DescriptorMatcher> _matcher) :
         detector(_detector),
         matcher(_matcher),
         tracking_enabled(false),
-        cameraResolution(sceneResolution),
         cameraMatrix(),
         distCoeffs()
 {
-    double focalLength = 700.;
-    cameraMatrix = (cv::Mat_<double>(3,3) <<
-        focalLength ,            0 , cameraResolution.width /2,
-                  0 ,  focalLength , cameraResolution.height/2,
-                  0,             0 , 1
-    );
+    if (!detector) {
+        detector = Feature2D::create("ORB");
+        detector->set("nFeatures", 700);
+    }
+    if(!matcher) {
+        matcher = DescriptorMatcher::create("BruteForce-Hamming");
+    }
 
 }
 
-Mat Tracker::process(const Mat frame, Ptr<Template> tpl, Stats& stats)
+Matx44d Tracker::process(const Mat frame, Ptr<Template> tpl, Ptr<Stats> stats)
 {
-    if (!tracking_enabled)
-        return match(frame, tpl, stats);
+    if (!tracking_enabled){
+        match(frame, tpl, stats);
+        return Matx44d();
+    }
     else
         return track(frame, tpl, stats);
 }
 
-Mat Tracker::match(const Mat frame, Ptr<Template> tpl, Stats& stats)
+void Tracker::match(const Mat frame, Ptr<Template> tpl, Ptr<Stats> stats)
 {
+
+    if (cameraMatrix.empty()) {
+        frameSize = frame.size();
+        double focalLength = 700.;
+        cameraMatrix = (cv::Mat_<double>(3,3) <<
+            focalLength ,            0 , frameSize.width /2,
+                    0 ,  focalLength , frameSize.height/2,
+                    0,             0 , 1
+        );
+    }
+
     auto t1 = getTickCount();
 
     vector<KeyPoint> kp;
     Mat desc;
     (*detector)(frame, noArray(), kp, desc);
-    stats.keypoints = (int)kp.size();
+
+    if (stats) stats->keypoints = (int)kp.size();
 
     vector< vector<DMatch> > matches;
     vector<KeyPoint> matched1, matched2;
@@ -82,7 +95,7 @@ Mat Tracker::match(const Mat frame, Ptr<Template> tpl, Stats& stats)
             matched2.push_back(      kp[matches[i][0].trainIdx]);
         }
     }
-    stats.matches = (int)matched1.size();
+    if(stats) stats->matches = (int)matched1.size();
 
     Mat inlier_mask, homography;
     vector<KeyPoint> inliers1, inliers2;
@@ -93,24 +106,23 @@ Mat Tracker::match(const Mat frame, Ptr<Template> tpl, Stats& stats)
     }
 
     if(matched1.size() < 4 || homography.empty()) {
-        Mat res;
-
+#ifdef CHILITRACK_DEBUG
         Mat outImg;
         Size img1size = tpl->image().size(), img2size = frame.size();
         Size size( img1size.width + img2size.width, MAX(img1size.height, img2size.height)   );
-        res.create( size, CV_MAKETYPE(tpl->image().depth(), 3) );
-        res = Scalar::all(0);
-        Mat outImg1 = res( Rect(0, 0, img1size.width, img1size.height) );
-        Mat outImg2 = res( Rect(img1size.width, 0, img2size.width, img2size.height) );
+        _debug.create( size, CV_MAKETYPE(tpl->image().depth(), 3) );
+        _debug = Scalar::all(0);
+        Mat outImg1 = _debug( Rect(0, 0, img1size.width, img1size.height) );
+        Mat outImg2 = _debug( Rect(img1size.width, 0, img2size.width, img2size.height) );
         tpl->debug().copyTo(outImg1);
         frame.copyTo(outImg2);
+#endif
 
-
-
-
-        stats.inliers = 0;
-        stats.ratio = 0;
-        return res;
+        if(stats) {
+            stats->inliers = 0;
+            stats->ratio = 0;
+        }
+        return;
     }
     for(unsigned i = 0; i < matched1.size(); i++) {
         if(inlier_mask.at<uchar>(i)) {
@@ -120,13 +132,15 @@ Mat Tracker::match(const Mat frame, Ptr<Template> tpl, Stats& stats)
             inlier_matches.push_back(DMatch(new_i, new_i, 0));
         }
     }
-    stats.inliers = (int)inliers1.size();
-    stats.ratio = stats.inliers * 1.0 / stats.matches;
+    if(stats) {
+        stats->inliers = (int)inliers1.size();
+        stats->ratio = stats->inliers * 1.0 / stats->matches;
 
-    stats.duration = (int)((double)(getTickCount() - t1)/getTickFrequency() * 1000);
+        stats->duration = (int)((double)(getTickCount() - t1)/getTickFrequency() * 1000);
+    }
 
     // Project the tpl tracking features onto the scene and enable tracking
-    if(stats.inliers >= bb_min_inliers) {
+    if((int)inliers1.size() >= bb_min_inliers) {
         perspectiveTransform(tpl->tracking_kpts, features, homography);
         prev_frame = frame.clone();
         tracking_enabled = true;
@@ -139,16 +153,15 @@ Mat Tracker::match(const Mat frame, Ptr<Template> tpl, Stats& stats)
         _variance = variance(features);
     }
 
-    // Debugging
-    Mat res;
+#ifdef CHILITRACK_DEBUG
     drawMatches(tpl->debug(), inliers1, frame, inliers2,
-                inlier_matches, res,
+                inlier_matches, _debug,
                 Scalar(255, 0, 0), Scalar(255, 0, 0));
-    return res;
+#endif
 }
 
 
-Mat Tracker::track(const Mat frame, Ptr<Template> tpl, Stats& stats)
+Matx44d Tracker::track(const Mat frame, Ptr<Template> tpl, Ptr<Stats> stats)
 {
     auto t1 = getTickCount();
 
@@ -193,24 +206,22 @@ Mat Tracker::track(const Mat frame, Ptr<Template> tpl, Stats& stats)
     if (found.size() < Template::NB_FEATURES / 2) {
         tracking_enabled = false;
 
-        // Debug
-        // -----
-
+#ifdef CHILITRACK_DEBUG
         Mat outImg;
         vector<KeyPoint> kpts_viz;
         KeyPoint::convert(found, kpts_viz);
         drawKeypoints(frame, kpts_viz, outImg, Scalar::all(255));
 
-        return combineImages(tpl->debug(), outImg);
+        _debug = combineImages(tpl->debug(), outImg);
+#endif
+        return Matx44d();
     }
 
     auto transformation = computeTransformation(tpl);
 
-    stats.duration = (int)((double)(getTickCount() - t1)/getTickFrequency() * 1000);
+    if (stats) stats->duration = (int)((double)(getTickCount() - t1)/getTickFrequency() * 1000);
 
-    // Debug
-    // -----
-
+#ifdef CHILITRACK_DEBUG
     Mat outImg;
     vector<KeyPoint> kpts_viz;
     KeyPoint::convert(found, kpts_viz);
@@ -220,7 +231,10 @@ Mat Tracker::track(const Mat frame, Ptr<Template> tpl, Stats& stats)
     draw3DRect(outImg, tpl->bb, transformation, cameraMatrix);
 
 
-    return combineImages(tpl->debug(), outImg);
+    _debug = combineImages(tpl->debug(), outImg);
+#endif
+
+    return transformation;
 }
 
 Matx44d Tracker::computeTransformation(Ptr<Template> tpl) const
@@ -289,9 +303,10 @@ void Tracker::readCalibration(const std::string &filename) {
     fs["image_width"]             >> size.width;
     fs["image_height"]            >> size.height;
 
-    if (size != cameraResolution) {
+    if (frameSize.width * frameSize.height != 0
+        && size != frameSize) {
         cerr << "The calibration was done for a resolution (" << size 
-             << ") that does not match the current one (" << cameraResolution 
+             << ") that does not match the current one (" << frameSize 
              << ")." <<endl;
         cerr << "Using default camera parameter as fallback." << endl;
         return;

@@ -10,6 +10,11 @@ Template::Template(Mat tpl,
 
     _tpl = tpl.clone();
 
+    if (!detector) {
+        detector = Feature2D::create("ORB");
+        detector->set("nFeatures", 700);
+    }
+
     // Extract features and descriptors from the tpl image
     // -------------------------------
 

@@ -15,9 +15,13 @@ public:
     // Nb of features used for tracking the template
     static const int NB_FEATURES = 50;
 
+    /**
+     *
+     * Size is the *physical size*, in mm, of the template image
+     */
     Template(cv::Mat tpl, 
              cv::Size size, 
-             cv::Ptr<cv::Feature2D> detector);
+             cv::Ptr<cv::Feature2D> detector = cv::Ptr<cv::Feature2D>());
 
     cv::Mat image() const {return _tpl;}
     cv::Mat debug() const {return _tpl_debug;}
@@ -37,15 +41,20 @@ protected:
 class Tracker
 {
 public:
-    Tracker(cv::Ptr<cv::Feature2D> _detector,
-            cv::Ptr<cv::DescriptorMatcher> _matcher,
-            cv::Size sceneResolution);
+    Tracker(cv::Ptr<cv::Feature2D> _detector = cv::Ptr<cv::Feature2D>(),
+            cv::Ptr<cv::DescriptorMatcher> _matcher = cv::Ptr<cv::DescriptorMatcher>());
 
-    cv::Mat process(const cv::Mat frame, cv::Ptr<Template> tpl, Stats& stats);
+    /** Main tracking method: takes an image and a pointer to a template and returns the 4x4 transformation matrix of the template in the image.
+     */
+    cv::Matx44d process(const cv::Mat frame, 
+                        cv::Ptr<Template> tpl, 
+                        cv::Ptr<Stats> stats = cv::Ptr<Stats>());
+
+
     cv::Ptr<cv::Feature2D> getDetector() {return detector;}
 
     /**
-      For accurate results, Chilitags3D can be provided the calibration data of
+      For accurate results, chilitrack can be provided the calibration data of
       the camera detecting the chilitags.  See
       https://docs.opencv.org/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
       for background on this topic.
@@ -77,13 +86,11 @@ public:
       */
     void readCalibration(const std::string &filename);
 
+    cv::Mat _debug;
 
 protected:
-    cv::Mat match(const cv::Mat frame, cv::Ptr<Template> tpl, Stats& stats);
-    cv::Mat track(const cv::Mat frame, cv::Ptr<Template> tpl, Stats& stats);
-
-
-    cv::Matx44d computeTransformation(cv::Ptr<Template> tpl) const;
+    void match(const cv::Mat frame, cv::Ptr<Template> tpl, cv::Ptr<Stats> stats);
+    cv::Matx44d track(const cv::Mat frame, cv::Ptr<Template> tpl, cv::Ptr<Stats> stats);
 
     cv::Ptr<cv::Feature2D> detector;
     cv::Ptr<cv::DescriptorMatcher> matcher;
@@ -95,11 +102,14 @@ protected:
     cv::Mat prev_frame;
     bool tracking_enabled;
 
-    cv::Size cameraResolution;
+    cv::Size frameSize;
     cv::Mat cameraMatrix;
     cv::Mat distCoeffs;
 
+
 private:
+    cv::Matx44d computeTransformation(cv::Ptr<Template> tpl) const;
+
     void pruneFeatures(std::vector<cv::Point2f>& features, 
                        std::vector<cv::Point3f>& tpl_points );
     cv::Point2f _centroid;
