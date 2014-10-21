@@ -13,6 +13,10 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
 endif()
 
 include_directories(include)
+
 add_executable(tracker samples/tracker.cpp src/tracker.cpp src/template.cpp)
 target_link_libraries(tracker ${OpenCV_LIBRARIES})
+
+add_executable(minimal samples/minimal.cpp src/tracker.cpp src/template.cpp)
+target_link_libraries(minimal ${OpenCV_LIBRARIES})
 
