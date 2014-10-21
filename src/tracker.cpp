@@ -10,10 +10,11 @@ using namespace std;
 using namespace cv;
 using namespace chilitrack;
 
-const double akaze_thresh = 3e-4; // AKAZE detection threshold set to locate about 1000 keypoints
 const double ransac_thresh = 2.5f; // RANSAC inlier threshold
 const double nn_match_ratio = 0.8f; // Nearest-neighbour matching ratio
-const int bb_min_inliers = 30; // Minimal number of inliers to draw bounding box
+
+const int min_inliers = 10; // Minimal number of inliers to compute transform
+const int min_inliers_ratio = 0.5; // Minimal ratio of inliers vs matches to compute transform
 
 Point2f mean(const vector<Point2f>& vals)
 {
@@ -142,7 +143,9 @@ void Tracker::match(const Mat frame, Ptr<Template> tpl, Ptr<Stats> stats)
     }
 
     // Project the tpl tracking features onto the scene and enable tracking
-    if((int)inliers1.size() >= bb_min_inliers) {
+    if((float)(inliers1.size()) / matched1.size() >= min_inliers_ratio
+        && inliers1.size() >= min_inliers) 
+    {
         perspectiveTransform(tpl->tracking_kpts, features, homography);
         prev_frame = frame.clone();
         tracking_enabled = true;

@@ -56,7 +56,6 @@ int main(int argc, char **argv)
 
 
     //Ptr<Feature2D> detector = Feature2D::create("AKAZE");
-    //detector->set("threshold", akaze_thresh);
     Ptr<Feature2D> detector = Feature2D::create("ORB");
     detector->set("nFeatures", 700); // default: 500
 
