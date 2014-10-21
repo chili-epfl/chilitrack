@@ -43,7 +43,9 @@ Tracker::Tracker(Ptr<Feature2D> _detector,
         matcher(_matcher),
         tracking_enabled(false),
         cameraMatrix(),
-        distCoeffs()
+        distCoeffs(),
+        rotation(3,1),
+        translation(3,1)
 {
     if (!detector) {
         detector = Feature2D::create("ORB");
@@ -239,23 +241,20 @@ Matx44d Tracker::track(const Mat frame, Ptr<Template> tpl, Ptr<Stats> stats)
 
 Matx44d Tracker::computeTransformation(Ptr<Template> tpl) const
 {
-    // Rotation & translation vectors, computed by cv::solvePnP
-    cv::Mat rotation, translation;
-
     // Find the 3D pose of our template
     cv::solvePnPRansac(tpl_points,
                  features,
                  cameraMatrix, distCoeffs,
                  rotation, translation, false,
-                 SOLVEPNP_EPNP);
+                 SOLVEPNP_ITERATIVE);
 
     cv::Matx33d rotMat;
     cv::Rodrigues(rotation, rotMat);
 
     return {
-        rotMat(0,0) , rotMat(0,1) , rotMat(0,2) , translation.at<double>(0) ,
-        rotMat(1,0) , rotMat(1,1) , rotMat(1,2) , translation.at<double>(1) ,
-        rotMat(2,0) , rotMat(2,1) , rotMat(2,2) , translation.at<double>(2) ,
+        rotMat(0,0) , rotMat(0,1) , rotMat(0,2) , translation(0) ,
+        rotMat(1,0) , rotMat(1,1) , rotMat(1,2) , translation(1) ,
+        rotMat(2,0) , rotMat(2,1) , rotMat(2,2) , translation(2) ,
                   0 ,           0 ,           0 ,                         1 ,
     };
 }

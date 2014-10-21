@@ -115,6 +115,9 @@ private:
     cv::Point2f _centroid;
     double _variance;
 
+    // Rotation & translation vectors, computed by cv::solvePnP
+    cv::Mat_<double> rotation, translation;
+
 
 };
 
