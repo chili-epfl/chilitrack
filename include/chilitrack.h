@@ -92,6 +92,15 @@ public:
       */
     void readCalibration(const std::string &filename);
 
+    /**
+      Returns the vertical camera field of view in degrees, based on the known
+      camera calibration.
+
+      Useful to later re-build projection matrices, for instance in OpenGL.
+      */
+    float getFOV() const;
+
+
     cv::Mat _debug;
 
 protected:

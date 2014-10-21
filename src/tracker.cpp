@@ -332,3 +332,7 @@ void Tracker::readCalibration(const std::string &filename) {
     cout << "Using camera calibration from file " << filename << "." << endl;
 }
 
+float Tracker::getFOV() const {
+    return 2 * atan(cameraMatrix.at<double>(1,2)/cameraMatrix.at<double>(0,0)) * 180.f/M_PI;
+}
+
