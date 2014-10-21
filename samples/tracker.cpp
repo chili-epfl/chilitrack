@@ -68,7 +68,7 @@ int main(int argc, char **argv)
     }
 
     auto tpl = makePtr<Template>(Template(image_object,
-                                          Size(200, 297), 
+                                          Size(125, 266), 
                                           detector));
 
 
