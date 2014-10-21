@@ -33,6 +33,8 @@ public:
     std::vector<cv::Point3f> tpl_points;
     cv::Rect bb;
 
+    bool tracked;
+
 protected:
     cv::Mat _tpl;
     cv::Mat _tpl_debug;
@@ -44,12 +46,16 @@ public:
     Tracker(cv::Ptr<cv::Feature2D> _detector = cv::Ptr<cv::Feature2D>(),
             cv::Ptr<cv::DescriptorMatcher> _matcher = cv::Ptr<cv::DescriptorMatcher>());
 
-    /** Main tracking method: takes an image and a pointer to a template and returns the 4x4 transformation matrix of the template in the image.
+    /** Main tracking method: takes an image and returns all the 4x4 transformations     matrices for the templates found in the image.
      */
-    cv::Matx44d process(const cv::Mat frame, 
-                        cv::Ptr<Template> tpl, 
-                        cv::Ptr<Stats> stats = cv::Ptr<Stats>());
+    std::map<std::string, cv::Matx44d> estimate(
+                                const cv::Mat frame, 
+                                cv::Ptr<Stats> stats = cv::Ptr<Stats>());
 
+
+    void add_template(const std::string& id, cv::Ptr<Template> tpl) {
+        _templates[id] = tpl;
+    }
 
     cv::Ptr<cv::Feature2D> getDetector() {return detector;}
 
@@ -100,12 +106,12 @@ protected:
 
     // when tracking, store the previous frame for optical flow computation
     cv::Mat prev_frame;
-    bool tracking_enabled;
 
     cv::Size frameSize;
     cv::Mat cameraMatrix;
     cv::Mat distCoeffs;
 
+    std::map<std::string, cv::Ptr<Template>> _templates;
 
 private:
     cv::Matx44d computeTransformation(cv::Ptr<Template> tpl) const;
@@ -117,7 +123,6 @@ private:
 
     // Rotation & translation vectors, computed by cv::solvePnP
     cv::Mat_<double> rotation, translation;
-
 
 };
 

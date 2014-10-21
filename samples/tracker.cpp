@@ -71,6 +71,7 @@ int main(int argc, char **argv)
                                           Size(125, 266), 
                                           detector));
 
+    tracker.add_template("tpl1", tpl);
 
     auto stats = makePtr<Stats>();
     Stats draw_stats, global_stats;
@@ -80,7 +81,7 @@ int main(int argc, char **argv)
         bool update_stats = (frame_count % stats_update_period == 0);
         video_in >> frame;
 
-        tracker.process(frame, tpl, stats);
+        tracker.estimate(frame, stats);
         global_stats += *stats;
         if(update_stats) {
             draw_stats = *stats;

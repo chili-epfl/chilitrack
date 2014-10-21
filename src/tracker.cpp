@@ -42,7 +42,6 @@ Tracker::Tracker(Ptr<Feature2D> _detector,
                  Ptr<DescriptorMatcher> _matcher) :
         detector(_detector),
         matcher(_matcher),
-        tracking_enabled(false),
         cameraMatrix(),
         distCoeffs(),
         rotation(3,1),
@@ -58,14 +57,22 @@ Tracker::Tracker(Ptr<Feature2D> _detector,
 
 }
 
-Matx44d Tracker::process(const Mat frame, Ptr<Template> tpl, Ptr<Stats> stats)
+map<string, Matx44d> Tracker::estimate(const Mat frame, Ptr<Stats> stats)
 {
-    if (!tracking_enabled){
-        match(frame, tpl, stats);
-        return Matx44d();
+
+    map<string, Matx44d> res;
+
+    for (auto& kv : _templates) {
+        if (!kv.second->tracked) {
+            match(frame, kv.second, stats);
+        }
+        else {
+            auto mat = track(frame, kv.second, stats);
+            if (!Mat(mat).empty()) res[kv.first] = mat;
+        }
     }
-    else
-        return track(frame, tpl, stats);
+
+    return res;
 }
 
 void Tracker::match(const Mat frame, Ptr<Template> tpl, Ptr<Stats> stats)
@@ -148,7 +155,7 @@ void Tracker::match(const Mat frame, Ptr<Template> tpl, Ptr<Stats> stats)
     {
         perspectiveTransform(tpl->tracking_kpts, features, homography);
         prev_frame = frame.clone();
-        tracking_enabled = true;
+        tpl->tracked = true;
     
         // initially, all tpl features are present
         tpl_points = tpl->tpl_points;
@@ -209,7 +216,7 @@ Matx44d Tracker::track(const Mat frame, Ptr<Template> tpl, Ptr<Stats> stats)
     
     // If too many features are lost, leave tracking and go back to match
     if (found.size() < Template::NB_FEATURES / 2) {
-        tracking_enabled = false;
+        tpl->tracked = false;
 
 #ifdef CHILITRACK_DEBUG
         Mat outImg;

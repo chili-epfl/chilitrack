@@ -39,7 +39,9 @@ void erosion_mask(Mat src, OutputArray out, int erosion_size )
 
 Template::Template(Mat tpl, 
                    Size size, 
-                    Ptr<Feature2D> detector) {
+                   Ptr<Feature2D> detector) :
+        tracked(false)
+    {
 
     _tpl = tpl.clone();
 

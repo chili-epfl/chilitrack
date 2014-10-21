@@ -42,6 +42,7 @@ int main(int argc, char **argv)
     // ==================
 
     Tracker tracker;
+    tracker.add_template("tpl1", tpl);
 
     // Main loop
     // =========
@@ -50,7 +51,7 @@ int main(int argc, char **argv)
     {
         video_in >> frame;
 
-        cout << tracker.process(frame, tpl);
+        cout << "Found " << tracker.estimate(frame).size() << " templates\n";
         imshow("tracking", tracker._debug);
         if (waitKey(10) >= 0) break;
     }
