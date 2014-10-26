@@ -2,6 +2,8 @@
 #include <opencv2/video.hpp>
 #include <opencv2/opencv.hpp>
 
+#include<QDebug>
+
 #include "utils.h" // Drawing and printing functions
 
 #include "chilitrack.h"
@@ -98,7 +100,13 @@ void Tracker::match(const Mat frame, Ptr<Template> tpl, Ptr<Stats> stats)
 
     vector< vector<DMatch> > matches;
     vector<KeyPoint> matched1, matched2;
+    qDebug() << "Frame: " << frame.size().width << "x" << frame.size().height;
+    qDebug() << "desc:  " << desc.size().width << "x" << desc.size().height;
+    qDebug() << "tpl->desc: " << tpl->desc.size().width << "x" << tpl->desc.size().height;
+    if(desc.size().width != 32) //TODO: disgusting hack
+        return;
     matcher->knnMatch(tpl->desc, desc, matches, 2);
+    qDebug() << "knnMatch survived";
     for(unsigned i = 0; i < matches.size(); i++) {
         if(matches[i][0].distance < nn_match_ratio * matches[i][1].distance) {
             matched1.push_back(tpl->kpts[matches[i][0].queryIdx]);
